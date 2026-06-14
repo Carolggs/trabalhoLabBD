@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Eye, EyeOff, LogIn, Loader } from 'lucide-react';
+import F1Brand from '../components/F1Brand';
 import './Login.css';
 
 export default function Login() {
@@ -27,10 +29,7 @@ export default function Login() {
 
       <div className="login-card">
         <div className="login-header">
-          <div className="login-logo">
-            <span className="login-logo-f1">F1</span>
-            <span className="login-logo-db">DataBase</span>
-          </div>
+          <F1Brand size="lg" />
           <p className="login-subtitle">Sistema de Gestão — Fórmula 1</p>
         </div>
 
@@ -68,7 +67,7 @@ export default function Login() {
                 onClick={() => setShowPass(v => !v)}
                 aria-label={showPass ? 'Ocultar senha' : 'Mostrar senha'}
               >
-                {showPass ? '🙈' : '👁️'}
+                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
@@ -80,7 +79,9 @@ export default function Login() {
           )}
 
           <button type="submit" className="btn-login" disabled={loading}>
-            {loading ? 'Entrando…' : 'Entrar'}
+            {loading
+              ? <><Loader size={15} className="icon-spin" /> Entrando…</>
+              : <><LogIn size={15} /> Entrar</>}
           </button>
         </form>
 

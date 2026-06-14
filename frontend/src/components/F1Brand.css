@@ -1,0 +1,72 @@
+.f1-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  user-select: none;
+}
+
+/* ── Ícone com gradiente ──────────────────────────────── */
+.f1-brand-icon {
+  background: linear-gradient(135deg, #e10600 0%, #ff5500 60%, #ff8000 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow:
+    0 0 0 1px rgba(255, 128, 0, 0.25),
+    0 4px 16px rgba(225, 6, 0, 0.45);
+}
+
+/* ── Texto ────────────────────────────────────────────── */
+.f1-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+  gap: 0.15em;
+}
+
+.f1-brand-name {
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.f1-brand-sub {
+  font-weight: 600;
+  color: #888;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+/* ── Tamanhos ─────────────────────────────────────────── */
+.f1-brand--sm .f1-brand-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+.f1-brand--sm .f1-brand-icon svg { width: 16px; height: 16px; }
+.f1-brand--sm .f1-brand-name { font-size: 1rem; }
+.f1-brand--sm .f1-brand-sub  { font-size: 0.55rem; }
+
+.f1-brand--md .f1-brand-icon {
+  width: 38px;
+  height: 38px;
+}
+.f1-brand--md .f1-brand-icon svg { width: 20px; height: 20px; }
+.f1-brand--md .f1-brand-name { font-size: 1.25rem; }
+.f1-brand--md .f1-brand-sub  { font-size: 0.6rem; }
+
+.f1-brand--lg .f1-brand-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgba(255, 128, 0, 0.3),
+    0 8px 28px rgba(225, 6, 0, 0.55);
+}
+.f1-brand--lg .f1-brand-icon svg { width: 30px; height: 30px; }
+.f1-brand--lg .f1-brand-name { font-size: 2rem; }
+.f1-brand--lg .f1-brand-sub  { font-size: 0.75rem; letter-spacing: 3px; }
