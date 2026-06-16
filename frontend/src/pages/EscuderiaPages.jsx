@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { api } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import { Search, Upload, Folder, CheckCircle, AlertTriangle, Loader } from 'lucide-react';
 import './EscuderiaPages.css';
 
 export function BuscarPiloto() {
+  const { user } = useAuth();
   const [surname, setSurname] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -20,7 +22,7 @@ export function BuscarPiloto() {
     try {
       setLoading(true);
       setError('');
-      const data = await api.searchPiloto(surname);
+      const data = await api.searchPiloto(surname, user.id_original);
       setResults(data.pilotos || []);
       setSearched(true);
     } catch (err) {

@@ -32,8 +32,8 @@ export const api = {
     request('/admin/constructors', { method: 'POST', body: JSON.stringify(data) }),
 
   // Escuderia Actions
-  searchPiloto: (surname) =>
-    request(`/escuderia/pilotos/search?surname=${encodeURIComponent(surname)}`),
+  searchPiloto: (surname, constructorId) =>
+    request(`/escuderia/pilotos/search?surname=${encodeURIComponent(surname)}&constructor_id=${constructorId}`),
   importPilotos: (formData) =>
     fetch(`${BASE_URL}/escuderia/pilotos/import`, {
       method: 'POST',
@@ -46,12 +46,14 @@ export const api = {
   // Relatórios Admin
   getRelatorioR1: () =>
     request('/admin/relatorios/r1'),
-  getRelatorioR2: () =>
-    request('/admin/relatorios/r2'),
+  getRelatorioR2: (cidade) =>
+    request(`/admin/relatorios/r2?cidade=${encodeURIComponent(cidade)}`),
   getRelatorioR3: () =>
     request('/admin/relatorios/r3'),
-  getRelatorioR3Detalhe: (circuitId) =>
-    request(`/admin/relatorios/r3/${circuitId}`),
+  getRelatorioR3Circuitos: (constructorId) =>
+    request(`/admin/relatorios/r3/${constructorId}`),
+  getRelatorioR3Corridas: (constructorId, circuitId) =>
+    request(`/admin/relatorios/r3/${constructorId}/${circuitId}`),
 
   // Relatórios Escuderia
   getRelatorioR4: (constructorId) =>

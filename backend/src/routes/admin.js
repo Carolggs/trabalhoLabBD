@@ -1,4 +1,3 @@
-// Rotas de Administrador
 import { Router } from 'express';
 import pool from '../db.js';
 
@@ -7,61 +6,76 @@ const router = Router();
 // GET /api/admin/dashboard
 router.get('/dashboard', async (req, res) => {
   try {
-    // Total de pilotos, escuderias, temporadas
+    // Três subqueries numa tacada só pra não fazer três round-trips pro banco
     const statsResult = await pool.query(`
       SELECT
-        (SELECT COUNT(*) FROM drivers) AS total_drivers,
+        (SELECT COUNT(*) FROM drivers)      AS total_drivers,
         (SELECT COUNT(*) FROM constructors) AS total_constructors,
-        (SELECT COUNT(*) FROM seasons) AS total_seasons
+        (SELECT COUNT(*) FROM seasons)      AS total_seasons
     `);
 
-    // Corridas da temporada mais recente
+    // Corridas da temporada mais recente com o circuito e total de voltas.
+    // MAX(res.laps) porque cada piloto tem uma linha em results — pegamos
+    // o maior valor de voltas completadas como proxy do total da corrida.
     const racesResult = await pool.query(`
       SELECT
         r.id, r.race_name, c.name AS circuit, r.race_date, r.race_time,
-        COUNT(DISTINCT res.driver_id) AS participantes
+        COALESCE(MAX(res.laps), 0) AS total_voltas
       FROM races r
-      JOIN circuits c ON r.circuit_id = c.id
-      JOIN seasons s ON r.season_id = s.id
+      JOIN circuits c  ON r.circuit_id = c.id
+      JOIN seasons s   ON r.season_id  = s.id
       LEFT JOIN results res ON r.id = res.race_id
       WHERE s.year = (SELECT MAX(year) FROM seasons)
       GROUP BY r.id, r.race_name, c.name, r.race_date, r.race_time
       ORDER BY r.race_date
     `);
 
-    // Escuderias com pontos (temporada mais recente)
+    // Ranking de escuderias por pontos na temporada mais recente.
+    //
+    // O problema de consultar driver_standings diretamente é que ela tem
+    // uma linha por rodada — se buscarmos sem filtro, o mesmo piloto/escuderia
+    // aparece várias vezes (uma por corrida disputada).
+    //
+    // Solução: DISTINCT ON (c.id) com ORDER BY round DESC pega apenas
+    // a linha mais recente de cada escuderia (o acumulado final).
+    // O ORDER BY externo (fora da subquery) aí sim ordena por pontos.
     const constructorsResult = await pool.query(`
-      SELECT
-        c.id, c.name,
-        SUM(res.points) AS total_pontos
-      FROM constructors c
-      JOIN results res ON c.id = res.constructor_id
-      JOIN races r ON res.race_id = r.id
-      JOIN seasons s ON r.season_id = s.id
-      WHERE s.year = (SELECT MAX(year) FROM seasons)
-      GROUP BY c.id, c.name
+      SELECT * FROM (
+        SELECT DISTINCT ON (c.id)
+          c.id, c.name,
+          st.points AS total_pontos
+        FROM constructor_standings cs
+        JOIN standings st   ON cs.standing_id   = st.id
+        JOIN constructors c ON cs.constructor_id = c.id
+        JOIN seasons s      ON st.season_id      = s.id
+        WHERE s.year = (SELECT MAX(year) FROM seasons)
+        ORDER BY c.id, st.round DESC
+      ) sub
       ORDER BY total_pontos DESC
     `);
 
-    // Pilotos com pontos (temporada mais recente)
+    // Mesmo padrão das escuderias — DISTINCT ON para eliminar duplicatas
+    // e pegar o acumulado do último round de cada piloto.
     const driversResult = await pool.query(`
-      SELECT
-        d.id, d.given_name || ' ' || d.family_name AS nome,
-        SUM(res.points) AS total_pontos
-      FROM drivers d
-      JOIN results res ON d.id = res.driver_id
-      JOIN races r ON res.race_id = r.id
-      JOIN seasons s ON r.season_id = s.id
-      WHERE s.year = (SELECT MAX(year) FROM seasons)
-      GROUP BY d.id
+      SELECT * FROM (
+        SELECT DISTINCT ON (d.id)
+          d.id, d.given_name || ' ' || d.family_name AS nome,
+          st.points AS total_pontos
+        FROM driver_standings ds
+        JOIN standings st ON ds.standing_id = st.id
+        JOIN drivers d    ON ds.driver_id   = d.id
+        JOIN seasons s    ON st.season_id   = s.id
+        WHERE s.year = (SELECT MAX(year) FROM seasons)
+        ORDER BY d.id, st.round DESC
+      ) sub
       ORDER BY total_pontos DESC
     `);
 
     res.json({
       ...statsResult.rows[0],
-      recent_races: racesResult.rows,
+      recent_races:        racesResult.rows,
       constructors_points: constructorsResult.rows,
-      drivers_points: driversResult.rows,
+      drivers_points:      driversResult.rows,
     });
   } catch (err) {
     console.error('Erro ao carregar dashboard admin:', err);
@@ -69,7 +83,7 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
-// POST /api/admin/drivers - Cadastrar piloto
+// POST /api/admin/drivers — cadastra um piloto novo
 router.post('/drivers', async (req, res) => {
   const { driver_ref, given_name, family_name, date_of_birth, nationality } = req.body;
 
@@ -78,7 +92,9 @@ router.post('/drivers', async (req, res) => {
   }
 
   try {
-    // Insere na tabela DRIVERS
+    // RETURNING id evita um SELECT separado depois do INSERT
+    // pra saber qual id foi gerado pelo SERIAL.
+    // O trigger trg_sync_driver_to_users cria o usuário em USERS automaticamente.
     const result = await pool.query(
       `INSERT INTO drivers (driver_ref, given_name, family_name, date_of_birth, nationality)
        VALUES ($1, $2, $3, $4, $5)
@@ -88,13 +104,10 @@ router.post('/drivers', async (req, res) => {
 
     const driver_id = result.rows[0].id;
 
-    // Trigger automático vai criar o usuário em USERS
-    // login: driver_ref_d, password: md5(driver_ref), tipo: Piloto
-
     res.status(201).json({
-      message: 'Piloto cadastrado com sucesso',
+      message:   'Piloto cadastrado com sucesso',
       driver_id,
-      login: `${driver_ref}_d`,
+      login:     `${driver_ref}_d`,
     });
   } catch (err) {
     console.error('Erro ao cadastrar piloto:', err);
@@ -106,7 +119,7 @@ router.post('/drivers', async (req, res) => {
   }
 });
 
-// POST /api/admin/constructors - Cadastrar escuderia
+// POST /api/admin/constructors — cadastra uma escuderia nova
 router.post('/constructors', async (req, res) => {
   const { constructor_ref, name, nationality, wikipedia_url } = req.body;
 
@@ -115,7 +128,8 @@ router.post('/constructors', async (req, res) => {
   }
 
   try {
-    // Insere na tabela CONSTRUCTORS
+    // Mesmo padrão do cadastro de piloto: RETURNING id + trigger automático
+    // que cria o usuário em USERS com tipo 'Escuderia'.
     const result = await pool.query(
       `INSERT INTO constructors (constructor_ref, name, nationality, wikipedia_url)
        VALUES ($1, $2, $3, $4)
@@ -125,13 +139,10 @@ router.post('/constructors', async (req, res) => {
 
     const constructor_id = result.rows[0].id;
 
-    // Trigger automático vai criar o usuário em USERS
-    // login: constructor_ref_c, password: md5(constructor_ref), tipo: Escuderia
-
     res.status(201).json({
-      message: 'Escuderia cadastrada com sucesso',
+      message:        'Escuderia cadastrada com sucesso',
       constructor_id,
-      login: `${constructor_ref}_c`,
+      login:          `${constructor_ref}_c`,
     });
   } catch (err) {
     console.error('Erro ao cadastrar escuderia:', err);
@@ -145,7 +156,8 @@ router.post('/constructors', async (req, res) => {
 
 // ── RELATÓRIOS ──────────────────────────────────────────────
 
-// R1: quantidade de resultados por status (nome do status + contagem)
+// R1: quantos resultados existem pra cada status (Finished, Accident, etc.)
+// Útil pra ter uma visão geral de como as corridas terminam na base toda.
 router.get('/relatorios/r1', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -162,141 +174,153 @@ router.get('/relatorios/r1', async (req, res) => {
   }
 });
 
-// R2: aeroportos a ≤100 km de cidade brasileira
-// Usa fórmula de Haversine; bounding-box pre-filtra os aeroportos candidatos
-// para evitar CROSS JOIN completo (Brasil: lat -35..5, lon -74..-32)
+// R2: aeroportos medium/large num raio de 100 km de uma cidade brasileira
 router.get('/relatorios/r2', async (req, res) => {
+  const { cidade } = req.query;
+  if (!cidade || cidade.trim() === '') {
+    return res.status(400).json({ error: 'Parâmetro "cidade" é obrigatório.' });
+  }
   try {
     const result = await pool.query(`
-      WITH brazil_cities AS (
+      WITH input_cities AS (
+        -- Pega todas as cidades brasileiras que batem com o nome digitado.
+        -- ILIKE faz a comparação case-insensitive sem precisar de LOWER nos dois lados.
         SELECT c.id, c.name, c.latitude, c.longitude
         FROM cities c
         JOIN countries co ON c.country_id = co.id
         WHERE co.code = 'BR'
+          AND c.name ILIKE $1
           AND c.latitude  IS NOT NULL
           AND c.longitude IS NOT NULL
       ),
-      nearest AS (
-        SELECT DISTINCT ON (a.id)
-          a.iata_code,
-          a.name          AS airport_nome,
-          bc.name         AS cidade,
-          at.type         AS tipo,
+      bounding AS (
+        -- Pré-filtra aeroportos pelo bounding box do Brasil antes de calcular distância.
+        -- Sem isso, o CROSS JOIN com todas as cidades seria pesado demais.
+        SELECT
+          a.id, a.iata_code, a.name AS airport_nome,
+          a.latitude_deg, a.longitude_deg,
+          at.type AS tipo,
+          ci.name AS cidade_aeroporto
+        FROM airports a
+        JOIN airport_types at ON a.airport_type_id = at.id
+        LEFT JOIN cities ci ON a.city_id = ci.id
+        WHERE a.iata_code IS NOT NULL
+          AND at.type IN ('medium_airport', 'large_airport')
+          AND a.latitude_deg  BETWEEN -36 AND  6
+          AND a.longitude_deg BETWEEN -75 AND -32
+      ),
+      distances AS (
+        -- Fórmula de Haversine: calcula distância em km entre dois pontos na superfície da Terra.
+        -- GREATEST/LEAST evitam erros de domínio no acos() quando os pontos são muito próximos
+        -- e arredondamento de ponto flutuante empurra o valor pra fora do intervalo [-1, 1].
+        SELECT
+          ic.name AS cidade_pesquisada,
+          b.iata_code,
+          b.airport_nome,
+          b.cidade_aeroporto,
+          b.tipo,
           ROUND((
             6371 * acos(
               GREATEST(-1, LEAST(1,
-                cos(radians(bc.latitude))  * cos(radians(a.latitude_deg)) *
-                cos(radians(a.longitude_deg) - radians(bc.longitude)) +
-                sin(radians(bc.latitude))  * sin(radians(a.latitude_deg))
+                cos(radians(ic.latitude))  * cos(radians(b.latitude_deg)) *
+                cos(radians(b.longitude_deg) - radians(ic.longitude)) +
+                sin(radians(ic.latitude))  * sin(radians(b.latitude_deg))
               ))
             )
-          )::numeric, 2)  AS distancia_km
-        FROM airports a
-        JOIN airport_types at ON a.airport_type_id = at.id
-        CROSS JOIN brazil_cities bc
-        WHERE a.iata_code IS NOT NULL
-          AND a.latitude_deg  BETWEEN -36 AND  6
-          AND a.longitude_deg BETWEEN -75 AND -32
-        ORDER BY a.id,
-          (6371 * acos(
-            GREATEST(-1, LEAST(1,
-              cos(radians(bc.latitude))  * cos(radians(a.latitude_deg)) *
-              cos(radians(a.longitude_deg) - radians(bc.longitude)) +
-              sin(radians(bc.latitude))  * sin(radians(a.latitude_deg))
-            ))
-          )) ASC
+          )::numeric, 2) AS distancia_km
+        FROM input_cities ic
+        CROSS JOIN bounding b
       )
-      SELECT iata_code, airport_nome, cidade, distancia_km, tipo
-      FROM nearest
+      SELECT cidade_pesquisada, iata_code, airport_nome, cidade_aeroporto, distancia_km, tipo
+      FROM distances
       WHERE distancia_km <= 100
       ORDER BY distancia_km
-    `);
-    res.json({ rows: result.rows });
+    `, [cidade.trim()]);
+    res.json({ rows: result.rows, cidade_buscada: cidade.trim() });
   } catch (err) {
     console.error('R2:', err);
     res.status(500).json({ error: 'Erro ao gerar relatório R2' });
   }
 });
 
-// R3 nível 1+2: circuitos com total de corridas e min/avg/max voltas
+// R3 — nível 0: todas as escuderias com total de pilotos e corridas disputadas
 router.get('/relatorios/r3', async (req, res) => {
   try {
-    const totalResult = await pool.query(
-      `SELECT COUNT(*) AS total_corridas FROM races`
-    );
-
-    const circuitsResult = await pool.query(`
+    const result = await pool.query(`
       SELECT
-        c.id            AS circuit_id,
-        c.name          AS circuit_name,
-        COUNT(r.id)     AS total_corridas,
-        MIN(laps_agg.max_laps)                    AS min_voltas,
-        ROUND(AVG(laps_agg.max_laps))::INTEGER    AS avg_voltas,
-        MAX(laps_agg.max_laps)                    AS max_voltas
-      FROM circuits c
-      JOIN races r ON c.id = r.circuit_id
-      JOIN (
-        SELECT race_id, MAX(laps) AS max_laps
-        FROM results
-        WHERE laps IS NOT NULL
-        GROUP BY race_id
-      ) laps_agg ON r.id = laps_agg.race_id
+        c.id                          AS constructor_id,
+        c.name                        AS constructor_name,
+        -- DISTINCT porque o mesmo piloto aparece várias vezes em results (uma por corrida)
+        COUNT(DISTINCT res.driver_id) AS num_pilotos,
+        COUNT(DISTINCT res.race_id)   AS total_corridas
+      FROM constructors c
+      LEFT JOIN results res ON c.id = res.constructor_id
       GROUP BY c.id, c.name
-      ORDER BY total_corridas DESC
+      ORDER BY num_pilotos DESC
     `);
-
-    res.json({
-      total_corridas: parseInt(totalResult.rows[0].total_corridas),
-      circuits: circuitsResult.rows,
-    });
+    res.json({ constructors: result.rows });
   } catch (err) {
     console.error('R3:', err);
     res.status(500).json({ error: 'Erro ao gerar relatório R3' });
   }
 });
 
-// R3 nível 3: corridas + pilotos de um circuito específico
-router.get('/relatorios/r3/:circuit_id', async (req, res) => {
-  const { circuit_id } = req.params;
+// R3 — nível 1: circuitos em que a escuderia correu, com min/avg/max de voltas
+router.get('/relatorios/r3/:constructor_id', async (req, res) => {
+  const { constructor_id } = req.params;
   try {
-    const racesResult = await pool.query(`
+    const result = await pool.query(`
       SELECT
-        r.id        AS race_id,
-        r.race_name,
-        r.race_date,
-        s.year,
-        COALESCE(MAX(res.laps), 0)          AS total_voltas,
-        COUNT(DISTINCT res.driver_id)       AS num_pilotos
-      FROM races r
-      JOIN seasons s ON r.season_id = s.id
-      LEFT JOIN results res ON r.id = res.race_id
-      WHERE r.circuit_id = $1
-      GROUP BY r.id, r.race_name, r.race_date, s.year
-      ORDER BY r.race_date DESC
-    `, [circuit_id]);
-
-    // Para cada corrida, busca os pilotos (top 10 para não explodir a resposta)
-    const races = await Promise.all(
-      racesResult.rows.map(async race => {
-        const pilotsResult = await pool.query(`
-          SELECT
-            d.given_name || ' ' || d.family_name AS driver_name,
-            res.position,
-            res.laps
-          FROM results res
-          JOIN drivers d ON res.driver_id = d.id
-          WHERE res.race_id = $1
-          ORDER BY res.position_order
-          LIMIT 10
-        `, [race.race_id]);
-        return { ...race, pilotos: pilotsResult.rows };
-      })
-    );
-
-    res.json({ races });
+        ci.id                            AS circuit_id,
+        ci.name                          AS circuit_name,
+        COUNT(DISTINCT ra.id)            AS total_corridas,
+        MIN(lp.max_laps)                 AS min_voltas,
+        ROUND(AVG(lp.max_laps))::INTEGER AS avg_voltas,
+        MAX(lp.max_laps)                 AS max_voltas
+      FROM results res
+      JOIN races ra    ON res.race_id    = ra.id
+      JOIN circuits ci ON ra.circuit_id  = ci.id
+      JOIN (
+        -- Subquery que pega o maior número de voltas completadas pela escuderia em cada corrida.
+        -- Cada piloto tem sua própria linha em results, então precisamos do MAX por corrida.
+        SELECT race_id, MAX(laps) AS max_laps
+        FROM results
+        WHERE laps IS NOT NULL AND constructor_id = $1
+        GROUP BY race_id
+      ) lp ON ra.id = lp.race_id
+      WHERE res.constructor_id = $1
+      GROUP BY ci.id, ci.name
+      ORDER BY total_corridas DESC
+    `, [constructor_id]);
+    res.json({ circuits: result.rows });
   } catch (err) {
-    console.error('R3 detalhe:', err);
-    res.status(500).json({ error: 'Erro ao carregar detalhe do circuito' });
+    console.error('R3 circuitos:', err);
+    res.status(500).json({ error: 'Erro ao carregar circuitos da escuderia' });
+  }
+});
+
+// R3 — nível 2: corridas de uma escuderia num circuito específico
+router.get('/relatorios/r3/:constructor_id/:circuit_id', async (req, res) => {
+  const { constructor_id, circuit_id } = req.params;
+  try {
+    const result = await pool.query(`
+      SELECT
+        ra.race_name,
+        s.year,
+        COALESCE(MAX(res.laps), 0)    AS total_voltas,
+        COUNT(DISTINCT res.driver_id) AS num_pilotos
+      FROM results res
+      JOIN races ra  ON res.race_id   = ra.id
+      JOIN seasons s ON ra.season_id  = s.id
+      WHERE res.constructor_id = $1
+        AND ra.circuit_id      = $2
+      GROUP BY ra.id, ra.race_name, s.year
+      ORDER BY s.year DESC
+    `, [constructor_id, circuit_id]);
+    res.json({ races: result.rows });
+  } catch (err) {
+    console.error('R3 corridas:', err);
+    res.status(500).json({ error: 'Erro ao carregar corridas do circuito' });
   }
 });
 

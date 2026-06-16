@@ -1,4 +1,3 @@
-// Rotas de Escuderia
 import { Router } from 'express';
 import pool from '../db.js';
 import multer from 'multer';
@@ -12,8 +11,9 @@ router.get('/dashboard/:constructor_id', async (req, res) => {
   const { constructor_id } = req.params;
 
   try {
-    // Usando funções armazenadas do banco para melhor performance
-    // Conceito: Stored functions encapsulam lógica no banco, não no backend
+    // As três queries abaixo chamam funções armazenadas definidas em 04_functions.sql.
+    // Optamos por funções no banco em vez de queries diretas aqui
+    // pra centralizar a lógica num único lugar e facilitar eventuais ajustes.
 
     const victoriesResult = await pool.query(
       `SELECT fn_escuderia_vitories($1) AS vitories`,
@@ -31,10 +31,10 @@ router.get('/dashboard/:constructor_id', async (req, res) => {
     );
 
     const data = {
-      vitories: parseInt(victoriesResult.rows[0]?.vitories || 0),
+      vitories:    parseInt(victoriesResult.rows[0]?.vitories || 0),
       pilots_count: parseInt(pilotsResult.rows[0]?.pilots_count || 0),
-      first_year: yearsResult.rows[0]?.first_year || null,
-      last_year: yearsResult.rows[0]?.last_year || null,
+      first_year:  yearsResult.rows[0]?.first_year || null,
+      last_year:   yearsResult.rows[0]?.last_year  || null,
     };
 
     res.json(data);
@@ -44,16 +44,21 @@ router.get('/dashboard/:constructor_id', async (req, res) => {
   }
 });
 
-// GET /api/escuderia/pilotos/search?surname=X
+// GET /api/escuderia/pilotos/search?surname=X&constructor_id=Y
 router.get('/pilotos/search', async (req, res) => {
-  const { surname } = req.query;
+  const { surname, constructor_id } = req.query;
 
   if (!surname) {
     return res.status(400).json({ error: 'Parâmetro surname é obrigatório' });
   }
+  if (!constructor_id) {
+    return res.status(400).json({ error: 'Parâmetro constructor_id é obrigatório' });
+  }
 
   try {
-    // Buscar pilotos por sobrenome que já correram
+    // LOWER + LIKE nos dois lados pra busca case-insensitive sem depender de collation.
+    // O EXISTS checa se o piloto já correu pela escuderia logada —
+    // sem isso, a busca retornaria pilotos de qualquer equipe.
     const result = await pool.query(
       `SELECT
          d.id, d.driver_ref,
@@ -61,9 +66,12 @@ router.get('/pilotos/search', async (req, res) => {
          d.date_of_birth, d.nationality
        FROM drivers d
        WHERE LOWER(d.family_name) LIKE LOWER($1)
-       AND EXISTS (SELECT 1 FROM results WHERE driver_id = d.id)
+         AND EXISTS (
+           SELECT 1 FROM results
+           WHERE driver_id = d.id AND constructor_id = $2
+         )
        ORDER BY d.given_name, d.family_name`,
-      [`%${surname}%`]
+      [`%${surname}%`, constructor_id]
     );
 
     res.json({ pilotos: result.rows });
@@ -74,19 +82,21 @@ router.get('/pilotos/search', async (req, res) => {
 });
 
 // POST /api/escuderia/pilotos/import
+// Recebe um arquivo .txt com uma linha por piloto no formato:
+// driver_ref,given_name,family_name,date_of_birth,country_id
 router.post('/pilotos/import', upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Arquivo é obrigatório' });
   }
 
   try {
-    // Converte buffer para string
     const content = req.file.buffer.toString('utf-8');
+    // filter(line => line.trim()) descarta linhas em branco no final do arquivo
     const lines = content.split('\n').filter(line => line.trim());
 
-    let imported = 0;
+    let imported  = 0;
     let duplicates = 0;
-    const errors = [];
+    const errors  = [];
 
     for (const line of lines) {
       const [driver_ref, given_name, family_name, date_of_birth, nationality] = line
@@ -99,7 +109,8 @@ router.post('/pilotos/import', upload.single('file'), async (req, res) => {
       }
 
       try {
-        // Verifica duplicata (mesmo nome e sobrenome)
+        // Antes de inserir, checa se já existe um piloto com mesmo nome e sobrenome.
+        // Usamos nome+sobrenome porque driver_ref pode vir diferente de uma carga pra outra.
         const existsResult = await pool.query(
           `SELECT id FROM drivers
            WHERE LOWER(given_name) = LOWER($1) AND LOWER(family_name) = LOWER($2)`,
@@ -111,14 +122,14 @@ router.post('/pilotos/import', upload.single('file'), async (req, res) => {
           continue;
         }
 
-        // Insere piloto
+        // O INSERT em drivers dispara automaticamente o trigger trg_sync_driver_to_users,
+        // que cria o usuário correspondente em USERS — não precisamos fazer isso manualmente.
         await pool.query(
           `INSERT INTO drivers (driver_ref, given_name, family_name, date_of_birth, nationality)
            VALUES ($1, $2, $3, $4, $5)`,
           [driver_ref, given_name, family_name, date_of_birth || null, nationality || 'Unknown']
         );
 
-        // Trigger automático cria o usuário em USERS
         imported++;
       } catch (err) {
         if (err.message.includes('já existe')) {
@@ -143,13 +154,14 @@ router.post('/pilotos/import', upload.single('file'), async (req, res) => {
 
 // ── RELATÓRIOS ──────────────────────────────────────────────
 
-// R4: pilotos da escuderia + quantidade de 1ª posições
+// R4: pilotos da escuderia e quantas vezes cada um largou em 1º
 router.get('/relatorios/r4/:constructor_id', async (req, res) => {
   const { constructor_id } = req.params;
   try {
     const result = await pool.query(`
       SELECT
         d.given_name || ' ' || d.family_name  AS driver_name,
+        -- COUNT com CASE é o jeito padrão de contar apenas as linhas que atendem uma condição
         COUNT(CASE WHEN res.position = '1' THEN 1 END)::INTEGER AS primeiras_posicoes
       FROM results res
       JOIN drivers d ON res.driver_id = d.id
@@ -164,7 +176,8 @@ router.get('/relatorios/r4/:constructor_id', async (req, res) => {
   }
 });
 
-// R5: resultados por status filtrado à escuderia
+// R5: distribuição de resultados por status para a escuderia
+// (quantas vezes terminou, abandonou, foi desqualificada, etc.)
 router.get('/relatorios/r5/:constructor_id', async (req, res) => {
   const { constructor_id } = req.params;
   try {

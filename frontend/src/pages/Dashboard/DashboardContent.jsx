@@ -57,7 +57,7 @@ export function AdminDash() {
               <th>Circuito</th>
               <th>Data</th>
               <th>Hora</th>
-              <th>Participantes</th>
+              <th>Voltas</th>
             </tr>
           </thead>
           <tbody>
@@ -67,7 +67,7 @@ export function AdminDash() {
                 <td>{r.circuit}</td>
                 <td>{new Date(r.race_date).toLocaleDateString('pt-BR')}</td>
                 <td>{r.race_time || '—'}</td>
-                <td>{r.participantes}</td>
+                <td>{r.total_voltas}</td>
               </tr>
             ))}
           </tbody>

@@ -103,31 +103,64 @@ function R1_StatusResultados() {
 }
 
 function R2_AeroportosBrasil() {
-  const { data, loading, error, load, reset } = useReport(() => api.getRelatorioR2());
+  const [cidade, setCidade] = useState('');
+  const { data, loading, error, load, reset } = useReport(() => api.getRelatorioR2(cidade));
+
+  function handleReset() {
+    reset();
+    setCidade('');
+  }
+
   return (
-    <ReportSection title="R2 — Aeroportos a ≤100 km de Cidade Brasileira" onClose={data ? reset : undefined}>
+    <ReportSection title="R2 — Aeroportos Próximos a Cidade Brasileira" onClose={data ? handleReset : undefined}>
       <p className="report-desc">
-        Aeroportos (com código IATA) localizados a no máximo 100 km de alguma cidade brasileira.
-        Distância calculada com a fórmula de Haversine.
+        Informe o nome de uma cidade brasileira. Serão exibidos aeroportos do tipo
+        <em> medium_airport</em> ou <em>large_airport</em> a no máximo 100 km,
+        usando a fórmula de Haversine.
       </p>
-      {!data && !loading && (
-        <button className="btn-report" onClick={load}>Gerar Relatório</button>
+
+      {!data && (
+        <div className="report-input-row">
+          <input
+            className="report-input"
+            type="text"
+            placeholder="Ex: São Paulo, Campinas, Brasília..."
+            value={cidade}
+            onChange={e => setCidade(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && cidade.trim() && load()}
+            disabled={loading}
+          />
+          <button
+            className="btn-report"
+            onClick={load}
+            disabled={loading || !cidade.trim()}
+          >
+            {loading
+              ? <><Loader size={14} className="icon-spin" /> Calculando...</>
+              : 'Buscar Aeroportos'}
+          </button>
+        </div>
       )}
-      {loading && <p className="report-loading"><Loader size={14} className="icon-spin" /> Calculando distâncias... (pode demorar alguns segundos)</p>}
+
       {error && <p className="report-error">{error}</p>}
+
       {data && (
         <>
-          <p className="report-count">{data.rows.length} aeroportos encontrados.</p>
-          <button className="btn-report btn-reload" onClick={load}><RefreshCw size={14} /> Atualizar</button>
+          <p className="report-count">
+            {data.rows.length} aeroporto(s) encontrado(s) próximo(s) a <strong>{data.cidade_buscada}</strong>.
+          </p>
+          <button className="btn-report btn-reload" onClick={load}><RefreshCw size={14} /> Nova Busca</button>
           <ReportTable
             columns={[
-              { key: 'iata_code',    label: 'IATA' },
-              { key: 'airport_nome', label: 'Aeroporto' },
-              { key: 'cidade',       label: 'Cidade Brasileira Mais Próxima' },
-              { key: 'distancia_km', label: 'Distância (km)', align: 'right' },
-              { key: 'tipo',         label: 'Tipo' },
+              { key: 'cidade_pesquisada',  label: 'Cidade Pesquisada' },
+              { key: 'iata_code',          label: 'IATA' },
+              { key: 'airport_nome',       label: 'Aeroporto' },
+              { key: 'cidade_aeroporto',   label: 'Cidade do Aeroporto' },
+              { key: 'distancia_km',       label: 'Distância (km)', align: 'right' },
+              { key: 'tipo',               label: 'Tipo' },
             ]}
             rows={data.rows}
+            emptyMsg="Nenhum aeroporto medium/large encontrado a ≤100 km dessa cidade."
           />
         </>
       )}
@@ -137,36 +170,59 @@ function R2_AeroportosBrasil() {
 
 function R3_HierarquiaCorridas() {
   const { data, loading, error, load, reset } = useReport(() => api.getRelatorioR3());
-  const [expanded, setExpanded]               = useState(null);
-  const [detail, setDetail]                   = useState({});
-  const [loadingDetail, setLoadingDetail]     = useState(null);
+
+  // expandedCon: constructor_id expandido (um por vez)
+  const [expandedCon, setExpandedCon]     = useState(null);
+  const [conData, setConData]             = useState({});   // { [con_id]: { loading, circuits } }
+  // expandedCir: circuit_id expandido dentro do constructor atual (um por vez)
+  const [expandedCir, setExpandedCir]     = useState(null);
+  const [cirData, setCirData]             = useState({});   // { [cir_id]: { loading, races } }
 
   function handleReset() {
     reset();
-    setExpanded(null);
-    setDetail({});
+    setExpandedCon(null);
+    setConData({});
+    setExpandedCir(null);
+    setCirData({});
   }
 
-  async function toggleCircuit(circuit_id) {
-    if (expanded === circuit_id) { setExpanded(null); return; }
-    setExpanded(circuit_id);
-    if (detail[circuit_id]) return;
+  async function toggleConstructor(constructor_id) {
+    if (expandedCon === constructor_id) {
+      setExpandedCon(null);
+      setExpandedCir(null);
+      return;
+    }
+    setExpandedCon(constructor_id);
+    setExpandedCir(null);
+    if (conData[constructor_id]) return;
+    setConData(prev => ({ ...prev, [constructor_id]: { loading: true, circuits: null } }));
     try {
-      setLoadingDetail(circuit_id);
-      const result = await api.getRelatorioR3Detalhe(circuit_id);
-      setDetail(prev => ({ ...prev, [circuit_id]: result.races }));
+      const result = await api.getRelatorioR3Circuitos(constructor_id);
+      setConData(prev => ({ ...prev, [constructor_id]: { loading: false, circuits: result.circuits } }));
     } catch {
-      setDetail(prev => ({ ...prev, [circuit_id]: [] }));
-    } finally {
-      setLoadingDetail(null);
+      setConData(prev => ({ ...prev, [constructor_id]: { loading: false, circuits: [] } }));
+    }
+  }
+
+  async function toggleCircuit(constructor_id, circuit_id) {
+    if (expandedCir === circuit_id) { setExpandedCir(null); return; }
+    setExpandedCir(circuit_id);
+    if (cirData[circuit_id]) return;
+    setCirData(prev => ({ ...prev, [circuit_id]: { loading: true, races: null } }));
+    try {
+      const result = await api.getRelatorioR3Corridas(constructor_id, circuit_id);
+      setCirData(prev => ({ ...prev, [circuit_id]: { loading: false, races: result.races } }));
+    } catch {
+      setCirData(prev => ({ ...prev, [circuit_id]: { loading: false, races: [] } }));
     }
   }
 
   return (
-    <ReportSection title="R3 — Hierarquia de Corridas por Circuito" onClose={data ? handleReset : undefined}>
+    <ReportSection title="R3 — Escuderias e Hierarquia de Corridas" onClose={data ? handleReset : undefined}>
       <p className="report-desc">
-        Nível 1: total geral de corridas. Nível 2: por circuito (min/avg/max voltas).
-        Nível 3: clique em um circuito para ver corridas e top 10 pilotos.
+        Escuderias com qtd de pilotos. Clique numa escuderia para ver o nível 1 (total de corridas)
+        e nível 2 (circuitos com min/avg/max voltas). Clique num circuito para ver o nível 3
+        (cada corrida com voltas registradas e pilotos participantes).
       </p>
       {!data && !loading && (
         <button className="btn-report" onClick={load}>Gerar Relatório</button>
@@ -175,87 +231,128 @@ function R3_HierarquiaCorridas() {
       {error && <p className="report-error">{error}</p>}
       {data && (
         <>
-          <div className="report-stat-banner">
-            Total geral de corridas na base: <strong>{data.total_corridas}</strong>
-          </div>
           <button className="btn-report btn-reload" onClick={load}><RefreshCw size={14} /> Atualizar</button>
-
           <div className="report-table-wrapper">
             <table className="report-table">
               <thead>
                 <tr>
                   <th></th>
-                  <th>Circuito</th>
+                  <th>Escuderia</th>
+                  <th className="text-right">Pilotos</th>
                   <th className="text-right">Corridas</th>
-                  <th className="text-right">Min Voltas</th>
-                  <th className="text-right">Avg Voltas</th>
-                  <th className="text-right">Max Voltas</th>
                 </tr>
               </thead>
               <tbody>
-                {data.circuits.map(c => (
+                {data.constructors.map(con => (
                   <>
+                    {/* Nível 0: linha da escuderia */}
                     <tr
-                      key={c.circuit_id}
-                      className={`circuit-row ${expanded === c.circuit_id ? 'expanded' : ''}`}
-                      onClick={() => toggleCircuit(c.circuit_id)}
+                      key={con.constructor_id}
+                      className={`circuit-row ${expandedCon === con.constructor_id ? 'expanded' : ''}`}
+                      onClick={() => toggleConstructor(con.constructor_id)}
                     >
                       <td className="expand-icon">
-                        {expanded === c.circuit_id
+                        {expandedCon === con.constructor_id
                           ? <ChevronDown size={14} />
                           : <ChevronRight size={14} />}
                       </td>
-                      <td>{c.circuit_name}</td>
-                      <td className="text-right">{c.total_corridas}</td>
-                      <td className="text-right">{c.min_voltas ?? '—'}</td>
-                      <td className="text-right">{c.avg_voltas ?? '—'}</td>
-                      <td className="text-right">{c.max_voltas ?? '—'}</td>
+                      <td>{con.constructor_name}</td>
+                      <td className="text-right">{con.num_pilotos}</td>
+                      <td className="text-right">{con.total_corridas}</td>
                     </tr>
 
-                    {expanded === c.circuit_id && (
-                      <tr key={`detail-${c.circuit_id}`} className="detail-row">
-                        <td colSpan={6}>
-                          {loadingDetail === c.circuit_id && (
-                            <p className="report-loading"><Loader size={14} className="icon-spin" /> Carregando corridas...</p>
+                    {/* Níveis 1+2+3: expandido sob a escuderia */}
+                    {expandedCon === con.constructor_id && (
+                      <tr key={`con-detail-${con.constructor_id}`} className="detail-row">
+                        <td colSpan={4}>
+                          {conData[con.constructor_id]?.loading && (
+                            <p className="report-loading"><Loader size={14} className="icon-spin" /> Carregando circuitos...</p>
                           )}
-                          {detail[c.circuit_id] && (
-                            <div className="races-detail">
-                              {detail[c.circuit_id].length === 0 ? (
-                                <p className="report-empty">Sem dados detalhados.</p>
-                              ) : (
-                                detail[c.circuit_id].map(race => (
-                                  <div key={race.race_id} className="race-block">
-                                    <div className="race-header">
-                                      <span className="race-name">{race.race_name}</span>
-                                      <span className="race-meta">
-                                        {race.year} · {race.total_voltas} voltas · {race.num_pilotos} pilotos
-                                      </span>
-                                    </div>
-                                    {race.pilotos && race.pilotos.length > 0 && (
-                                      <table className="pilots-table">
-                                        <thead>
-                                          <tr>
-                                            <th>Pos.</th>
-                                            <th>Piloto</th>
-                                            <th className="text-right">Voltas</th>
+                          {conData[con.constructor_id]?.circuits && (() => {
+                            const circuits = conData[con.constructor_id].circuits;
+                            const totalCorridas = circuits.reduce((s, c) => s + parseInt(c.total_corridas), 0);
+                            return (
+                              <div className="races-detail">
+                                {/* Nível 1: total de corridas da escuderia */}
+                                <div className="report-stat-banner" style={{ marginBottom: '0.75rem' }}>
+                                  Total de corridas desta escuderia: <strong>{totalCorridas}</strong>
+                                </div>
+                                {/* Nível 2: tabela de circuitos */}
+                                {circuits.length === 0 ? (
+                                  <p className="report-empty">Nenhuma corrida registrada.</p>
+                                ) : (
+                                  <table className="pilots-table">
+                                    <thead>
+                                      <tr>
+                                        <th></th>
+                                        <th>Circuito</th>
+                                        <th className="text-right">Corridas</th>
+                                        <th className="text-right">Min Voltas</th>
+                                        <th className="text-right">Avg Voltas</th>
+                                        <th className="text-right">Max Voltas</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {circuits.map(cir => (
+                                        <>
+                                          <tr
+                                            key={cir.circuit_id}
+                                            className={`circuit-row ${expandedCir === cir.circuit_id ? 'expanded' : ''}`}
+                                            onClick={() => toggleCircuit(con.constructor_id, cir.circuit_id)}
+                                          >
+                                            <td className="expand-icon">
+                                              {expandedCir === cir.circuit_id
+                                                ? <ChevronDown size={12} />
+                                                : <ChevronRight size={12} />}
+                                            </td>
+                                            <td>{cir.circuit_name}</td>
+                                            <td className="text-right">{cir.total_corridas}</td>
+                                            <td className="text-right">{cir.min_voltas ?? '—'}</td>
+                                            <td className="text-right">{cir.avg_voltas ?? '—'}</td>
+                                            <td className="text-right">{cir.max_voltas ?? '—'}</td>
                                           </tr>
-                                        </thead>
-                                        <tbody>
-                                          {race.pilotos.map((p, i) => (
-                                            <tr key={i}>
-                                              <td>{p.position ?? '—'}</td>
-                                              <td>{p.driver_name}</td>
-                                              <td className="text-right">{p.laps ?? '—'}</td>
+                                          {/* Nível 3: corridas do circuito desta escuderia */}
+                                          {expandedCir === cir.circuit_id && (
+                                            <tr key={`cir-detail-${cir.circuit_id}`} className="detail-row">
+                                              <td colSpan={6} style={{ paddingLeft: '2rem' }}>
+                                                {cirData[cir.circuit_id]?.loading && (
+                                                  <p className="report-loading"><Loader size={12} className="icon-spin" /> Carregando corridas...</p>
+                                                )}
+                                                {cirData[cir.circuit_id]?.races && (
+                                                  cirData[cir.circuit_id].races.length === 0
+                                                    ? <p className="report-empty">Sem corridas.</p>
+                                                    : <table className="pilots-table">
+                                                        <thead>
+                                                          <tr>
+                                                            <th>Ano</th>
+                                                            <th>Corrida</th>
+                                                            <th className="text-right">Voltas</th>
+                                                            <th className="text-right">Pilotos</th>
+                                                          </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                          {cirData[cir.circuit_id].races.map((race, i) => (
+                                                            <tr key={i}>
+                                                              <td>{race.year}</td>
+                                                              <td>{race.race_name}</td>
+                                                              <td className="text-right">{race.total_voltas}</td>
+                                                              <td className="text-right">{race.num_pilotos}</td>
+                                                            </tr>
+                                                          ))}
+                                                        </tbody>
+                                                      </table>
+                                                )}
+                                              </td>
                                             </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    )}
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          )}
+                                          )}
+                                        </>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                       </tr>
                     )}

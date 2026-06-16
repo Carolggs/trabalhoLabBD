@@ -1,14 +1,12 @@
-// Rotas de autenticação — Login e Logout
-// Conceito: autenticação por tabela USERS com senha hasheada em MD5 (req. 2)
-//           auditoria via USERS_LOG (req. 6)
-// Os SQL estão explícitos aqui para avaliação (sem ORM)
+// Login e logout — toda autenticação passa por aqui.
+// A senha nunca chega no banco em texto puro: o md5() é aplicado
+// direto no WHERE, então o banco só compara hashes.
 import { Router } from 'express';
 import pool from '../db.js';
 
 const router = Router();
 
 // POST /api/auth/login
-// Verifica credenciais na tabela USERS e registra LOGIN em USERS_LOG
 router.post('/login', async (req, res) => {
   const { login, password } = req.body;
 
@@ -17,8 +15,8 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    // SQL explícito: busca usuário comparando senha com md5()
-    // Conceito: autenticação via hash — nunca comparamos texto puro
+    // md5($2) roda no próprio banco — a senha em texto puro nunca
+    // sai do corpo da requisição e nunca fica logada em lugar nenhum.
     const result = await pool.query(
       `SELECT userid, login, tipo, id_original
        FROM USERS
@@ -33,15 +31,16 @@ router.post('/login', async (req, res) => {
 
     const user = result.rows[0];
 
-    // Registra LOGIN no log de auditoria (req. 6)
-    // Conceito: INSERT com NOW() para timestamp automático
+    // Registra o acesso em USERS_LOG independente de qualquer outra coisa.
+    // NOW() vem do banco pra não depender do relógio do servidor Node.
     await pool.query(
       `INSERT INTO USERS_LOG (userid, acao, timestamp)
        VALUES ($1, 'LOGIN', NOW())`,
       [user.userid]
     );
 
-    // Busca nome de exibição conforme o tipo de usuário
+    // O frontend precisa de um nome pra mostrar na tela.
+    // Admin não tem registro em drivers/constructors, então trata separado.
     let displayName = user.login;
     if (user.tipo === 'Piloto' && user.id_original) {
       const dr = await pool.query(
@@ -73,7 +72,6 @@ router.post('/login', async (req, res) => {
 });
 
 // POST /api/auth/logout
-// Registra LOGOUT em USERS_LOG e encerra a sessão
 router.post('/logout', async (req, res) => {
   const { userid } = req.body;
 
@@ -82,7 +80,8 @@ router.post('/logout', async (req, res) => {
   }
 
   try {
-    // SQL explícito: INSERT no log de auditoria para LOGOUT (req. 6)
+    // Só registra o LOGOUT no log — sem invalidar sessão no banco
+    // porque a sessão é controlada pelo sessionStorage no frontend.
     await pool.query(
       `INSERT INTO USERS_LOG (userid, acao, timestamp)
        VALUES ($1, 'LOGOUT', NOW())`,
