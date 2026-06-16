@@ -1,40 +1,40 @@
--- =============================================================
--- SCC-541 Projeto Final — Dia 1: Popular USERS a partir da base F1
--- Conceito: INSERT com SELECT (conjunto), md5() para hash seguro,
---           ON CONFLICT para idempotência
--- =============================================================
+-- Popula a tabela USERS com todos os pilotos e escuderias já existentes na base.
+-- A ideia é usar INSERT ... SELECT pra aproveitar os dados que já estão em
+-- constructors e drivers, sem precisar inserir um por um manualmente.
+--
+-- Padrão de login:
+--   escuderia → constructor_ref + "_c"   (ex: mclaren_c)
+--   piloto    → driver_ref    + "_d"     (ex: hamilton_d)
+--
+-- A senha inicial é o próprio ref hasheado com MD5.
+-- ON CONFLICT DO NOTHING garante que rodar esse script duas vezes não duplica nada.
 
 -- -------------------------------------------------------------
--- Inserir usuário para cada ESCUDERIA (padrão: <constructor_ref>_c)
--- Senha = constructor_ref (hasheada com MD5)
--- id_original = constructors.id
--- Conceito: junção implícita entre CONSTRUCTORS e USERS via INSERT SELECT
+-- Escuderias
 -- -------------------------------------------------------------
 INSERT INTO USERS (login, password, tipo, id_original)
 SELECT
-    c.constructor_ref || '_c'     AS login,
-    md5(c.constructor_ref)        AS password,   -- hash MD5 da senha
-    'Escuderia'                   AS tipo,
-    c.id                          AS id_original
+    c.constructor_ref || '_c',  -- login único por convenção
+    md5(c.constructor_ref),     -- senha = hash do ref, nunca texto puro
+    'Escuderia',
+    c.id
 FROM constructors c
 ON CONFLICT (login) DO NOTHING;
 
 -- -------------------------------------------------------------
--- Inserir usuário para cada PILOTO (padrão: <driver_ref>_d)
--- Senha = driver_ref (hasheada com MD5)
--- id_original = drivers.id
--- Conceito: mesmo padrão de INSERT SELECT, garantindo unicidade
+-- Pilotos
+-- Mesmo padrão, só muda o sufixo (_d) e a tabela de origem.
 -- -------------------------------------------------------------
 INSERT INTO USERS (login, password, tipo, id_original)
 SELECT
-    d.driver_ref || '_d'          AS login,
-    md5(d.driver_ref)             AS password,   -- hash MD5 da senha
-    'Piloto'                      AS tipo,
-    d.id                          AS id_original
+    d.driver_ref || '_d',
+    md5(d.driver_ref),
+    'Piloto',
+    d.id
 FROM drivers d
 ON CONFLICT (login) DO NOTHING;
 
--- Verificação rápida após carga
+-- Conferência rápida depois da carga pra ver se os números batem
 SELECT tipo, COUNT(*) AS total
 FROM USERS
 GROUP BY tipo

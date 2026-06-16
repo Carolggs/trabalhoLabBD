@@ -1,0 +1,129 @@
+/* Dashboard Content Styles */
+
+.dash-content {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dash-team-name {
+  color: #aaa;
+  font-size: 0.9rem;
+  margin: -0.5rem 0 1rem;
+}
+
+.dash-team-name strong {
+  color: #ff8000;
+}
+
+.dash-loading, .dash-error {
+  text-align: center;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  color: #aaa;
+  font-size: 0.95rem;
+}
+
+.dash-error {
+  color: #ff6b6b;
+  border: 1px solid rgba(225, 6, 0, 0.3);
+}
+
+.section-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 1.5rem;
+  border-left: 3px solid #e10600;
+  padding-left: 0.8rem;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #22222e 0%, #2a2a38 100%);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.stat-card:hover {
+  border-color: #e10600;
+  transform: translateY(-2px);
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #e10600;
+  margin-bottom: 0.3rem;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Sections */
+.dash-section {
+  background: #22222e;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-left: 3px solid #ff8000;
+}
+
+.dash-section h3 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  color: #fff;
+}
+
+/* Tables */
+.dash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.dash-table thead {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dash-table th {
+  color: #ccc;
+  padding: 0.7rem;
+  text-align: left;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  border-bottom: 1px solid #444;
+}
+
+.dash-table td {
+  padding: 0.8rem 0.7rem;
+  border-bottom: 1px solid #333;
+  color: #ddd;
+}
+
+.dash-table tbody tr:hover {
+  background: rgba(225, 6, 0, 0.1);
+}
+
+.text-right {
+  text-align: right;
+}

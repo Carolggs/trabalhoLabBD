@@ -1,0 +1,336 @@
+/* ── Layout ─────────────────────────────────────────────────────── */
+.relatorios-page {
+  background: #15151e;
+  min-height: 100vh;
+  color: #fff;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.relatorios-header {
+  background: #1e1e2e;
+  border-bottom: 2px solid #e10600;
+  padding: 0.75rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.relatorios-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.brand-f1 {
+  background: #e10600;
+  color: #fff;
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+}
+
+.brand-db { color: #ccc; }
+
+.btn-back {
+  background: transparent;
+  border: 1px solid #444;
+  color: #ccc;
+  padding: 0.4rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: border-color 0.2s, color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-back:hover { border-color: #e10600; color: #fff; }
+
+.relatorios-main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.relatorios-title {
+  font-size: 1.8rem;
+  color: #e10600;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #333;
+  padding-bottom: 0.5rem;
+}
+
+/* ── Seção de relatório ─────────────────────────────────────────── */
+.report-section {
+  background: #1e1e2e;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.report-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.report-section-title {
+  font-size: 1.15rem;
+  color: #ff8000;
+  margin: 0;
+}
+
+.btn-close-report {
+  background: transparent;
+  border: 1px solid #444;
+  color: #888;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: border-color 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+.btn-close-report:hover {
+  border-color: #e10600;
+  color: #e10600;
+}
+
+.report-desc {
+  color: #999;
+  font-size: 0.88rem;
+  margin-bottom: 1rem;
+}
+
+.report-loading {
+  color: #aaa;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.icon-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.report-error   { color: #e10600; }
+.report-empty   { color: #666; font-style: italic; }
+.report-count   { color: #aaa; font-size: 0.88rem; margin-bottom: 0.5rem; }
+
+.report-stat-banner {
+  background: #252535;
+  border-left: 3px solid #e10600;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+  color: #ccc;
+  border-radius: 0 4px 4px 0;
+}
+
+.report-stat-banner strong { color: #fff; }
+
+/* ── Botões ─────────────────────────────────────────────────────── */
+.btn-report {
+  background: #e10600;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1.2rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  transition: background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-report:hover { background: #c00500; }
+.btn-reload { background: #444; }
+.btn-reload:hover { background: #555; }
+
+/* ── Tabelas ────────────────────────────────────────────────────── */
+.report-table-wrapper {
+  overflow-x: auto;
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.report-table th {
+  background: #252535;
+  color: #ff8000;
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #333;
+  white-space: nowrap;
+}
+
+.report-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #2a2a3e;
+  color: #ddd;
+  vertical-align: top;
+}
+
+.report-table tr:hover td { background: #22223a; }
+.text-right { text-align: right !important; }
+
+/* ── R2: campo de input ─────────────────────────────────────────── */
+.report-input-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: nowrap;
+}
+
+.report-input-row .btn-report {
+  margin-bottom: 0;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.report-input {
+  flex: 1;
+  min-width: 220px;
+  background: #252535;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.report-input:focus { border-color: #e10600; }
+.report-input::placeholder { color: #666; }
+.report-input:disabled { opacity: 0.5; }
+
+.btn-report:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+
+/* ── R3: subtítulos internos ────────────────────────────────────── */
+.report-subsection-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ccc;
+  margin: 0 0 0.75rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid #ff8000;
+}
+
+/* ── R3: circuitos expansíveis ──────────────────────────────────── */
+.circuit-row {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.circuit-row:hover td { background: #252540; }
+.circuit-row.expanded td { background: #22223a; color: #fff; }
+
+.expand-icon {
+  color: #ff8000;
+  font-size: 0.75rem;
+  width: 24px;
+  text-align: center;
+}
+
+.detail-row td {
+  background: #1a1a2e !important;
+  padding: 0.75rem 1.5rem !important;
+}
+
+.races-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.race-block {
+  border-left: 2px solid #e10600;
+  padding-left: 0.75rem;
+}
+
+.race-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.race-name {
+  font-weight: 600;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.race-meta {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.pilots-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin-top: 0.25rem;
+}
+
+.pilots-table th {
+  color: #888;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.2rem 0.5rem;
+  border-bottom: 1px solid #333;
+}
+
+.pilots-table td {
+  padding: 0.2rem 0.5rem;
+  color: #ccc;
+  border-bottom: 1px solid #222;
+}
+
+/* ── R6: pontos por ano ─────────────────────────────────────────── */
+.year-block {
+  margin-bottom: 1.5rem;
+}
+
+.year-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.year-label {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #ff8000;
+}
+
+.year-total {
+  font-size: 0.9rem;
+  color: #aaa;
+  background: #252535;
+  padding: 0.15em 0.5em;
+  border-radius: 4px;
+}

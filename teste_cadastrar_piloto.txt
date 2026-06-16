@@ -1,0 +1,6 @@
+teste_piloto1,Carlos,Souza,1998-03-15,30
+teste_piloto2,Ana,Lima,2000-07-22,30
+teste_piloto3,Klaus,Müller,1995-11-05,55
+teste_piloto4,Sophie,Martin,2001-04-18,73
+teste_piloto5,Miguel,García,1993-08-30,66
+teste_piloto6,James,Williams,1990-01-12,75
