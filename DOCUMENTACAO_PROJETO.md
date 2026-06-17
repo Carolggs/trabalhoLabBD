@@ -24,21 +24,42 @@ Uma **função armazenada** é um bloco de código SQL escrito em PL/pgSQL (ling
 > **Analogia:** é como uma função em qualquer linguagem de programação, mas que vive dentro do banco de dados e tem acesso direto às tabelas.
 
 No projeto: usamos para encapsular cálculos complexos do dashboard (vitórias, anos de atividade, desempenho por circuito) que seriam feitos no backend — deixando o código Node.js mais limpo.
+- Definição das funções: [`sql/04_functions.sql`](sql/04_functions.sql)
+- Chamadas para escuderia: [`backend/src/routes/escuderia.js` linhas 18–31](backend/src/routes/escuderia.js#L18-L31)
+- Chamadas para piloto: [`backend/src/routes/piloto.js` linhas 12–19](backend/src/routes/piloto.js#L12-L19)
 
 ### O que é uma View?
 Uma **view** (visão) é uma **query salva** no banco com um nome. Não armazena dados — quando consultada, executa a query subjacente. Serve para reutilizar queries complexas sem repetição de código.
 
 > **Analogia:** é como um atalho ou apelido para uma query longa. Em vez de escrever 10 JOINs toda vez, você escreve `SELECT * FROM vw_resultados`.
 
+No projeto: criamos duas views para evitar repetição de JOINs complexos:
+- **`vw_season_recente`** — encapsula a subquery `(SELECT MAX(year) FROM seasons)` e os JOINs com `seasons` e `circuits`, usada no dashboard Admin para listar corridas da temporada atual.
+- **`vw_resultados`** — view desnormalizada que já faz o JOIN de `results` com `drivers`, `constructors`, `races`, `seasons`, `circuits` e `status` de uma vez, evitando repetir esses 6 JOINs em cada relatório.
+- Definição: [`sql/05_views_indexes.sql`](sql/05_views_indexes.sql)
+
 ### O que é um Índice?
 Um **índice** é uma estrutura auxiliar criada pelo banco para **acelerar buscas**. Sem índice, o banco lê linha por linha (full scan). Com índice, vai direto ao registro.
 
 > **Analogia:** é como o índice de um livro — em vez de ler todas as páginas para achar "Hamilton", você vai direto na letra H.
 
-No projeto: criamos índices nas colunas mais usadas em JOINs e filtros (`driver_id`, `constructor_id`, `status_id`, coordenadas geográficas).
+No projeto: criamos 12 índices nas colunas mais usadas em JOINs e filtros:
+- **`idx_results_driver`, `idx_results_constructor`, `idx_results_status`, `idx_results_race`** — cobrem os 4 JOINs mais frequentes sobre a tabela `results`, que tem centenas de milhares de linhas. Usados em praticamente todos os relatórios e dashboards.
+- **`idx_races_circuit`, `idx_races_season`** — aceleram os JOINs `races → circuits` e `races → seasons`, presentes em R3 e nos dashboards.
+- **`idx_airports_coords`, `idx_cities_coords`, `idx_cities_country`** — usados exclusivamente no R2 para o bounding box geográfico antes do cálculo de Haversine.
+- **`idx_users_login`, `idx_users_log_userid`, `idx_users_log_timestamp`** — aceleram o login (WHERE login = $1) e consultas de auditoria em USERS_LOG.
+- Definição: [`sql/05_views_indexes.sql`](sql/05_views_indexes.sql)
 
 ### O que é uma CTE (`WITH`)?
 Uma **CTE** (Common Table Expression) é uma query temporária definida com `WITH nome AS (...)` que pode ser referenciada depois na query principal. Serve para dividir queries complexas em partes legíveis.
+
+No projeto: usada exclusivamente no **Relatório R2** para dividir o cálculo de aeroportos próximos em 3 etapas nomeadas:
+1. `input_cities` — busca as cidades brasileiras com o nome digitado
+2. `bounding` — pré-filtra aeroportos pelo bounding box do Brasil (evita Haversine em aeroportos do mundo todo)
+3. `distances` — aplica a fórmula de Haversine apenas nos candidatos do bounding box
+
+Sem CTEs, essa query seria um único bloco de subqueries aninhadas ilegível.
+- Implementação: [`backend/src/routes/admin.js` linhas 184–238](backend/src/routes/admin.js#L184-L238)
 
 ---
 
@@ -55,7 +76,7 @@ Uma **CTE** (Common Table Expression) é uma query temporária definida com `WIT
 -- IF NOT EXISTS: evita erro se o script for executado mais de uma vez.
 CREATE TABLE IF NOT EXISTS USERS (
 
-    -- SERIAL: o banco gera o id automaticamente (auto-incremento).
+    -- SERIAL: o banco gera o id automaticamente (auto-incremento Define o tipo como INTEGER Cria uma sequência automática que gera o próximo número toda vez que você insere uma linha sem informar o userid).
     -- PRIMARY KEY: garante que cada userid seja único e não nulo.
     userid      SERIAL PRIMARY KEY,
 

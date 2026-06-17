@@ -15,19 +15,18 @@ router.get('/dashboard', async (req, res) => {
     `);
 
     // Corridas da temporada mais recente com o circuito e total de voltas.
+    // vw_season_recente já filtra pelo MAX(year) e traz os dados do circuito.
     // MAX(res.laps) porque cada piloto tem uma linha em results — pegamos
     // o maior valor de voltas completadas como proxy do total da corrida.
     const racesResult = await pool.query(`
       SELECT
-        r.id, r.race_name, c.name AS circuit, r.race_date, r.race_time,
+        vsr.race_id AS id, vsr.race_name, vsr.circuit_name AS circuit,
+        vsr.race_date, vsr.race_time,
         COALESCE(MAX(res.laps), 0) AS total_voltas
-      FROM races r
-      JOIN circuits c  ON r.circuit_id = c.id
-      JOIN seasons s   ON r.season_id  = s.id
-      LEFT JOIN results res ON r.id = res.race_id
-      WHERE s.year = (SELECT MAX(year) FROM seasons)
-      GROUP BY r.id, r.race_name, c.name, r.race_date, r.race_time
-      ORDER BY r.race_date
+      FROM vw_season_recente vsr
+      LEFT JOIN results res ON vsr.race_id = res.race_id
+      GROUP BY vsr.race_id, vsr.race_name, vsr.circuit_name, vsr.race_date, vsr.race_time
+      ORDER BY vsr.race_date
     `);
 
     // Ranking de escuderias por pontos na temporada mais recente.
@@ -161,10 +160,9 @@ router.post('/constructors', async (req, res) => {
 router.get('/relatorios/r1', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT st.status AS status_nome, COUNT(*) AS quantidade
-      FROM results res
-      JOIN status st ON res.status_id = st.id
-      GROUP BY st.id, st.status
+      SELECT status_nome, COUNT(*) AS quantidade
+      FROM vw_resultados
+      GROUP BY status_nome
       ORDER BY quantidade DESC
     `);
     res.json({ rows: result.rows });
@@ -305,17 +303,15 @@ router.get('/relatorios/r3/:constructor_id/:circuit_id', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
-        ra.race_name,
-        s.year,
-        COALESCE(MAX(res.laps), 0)    AS total_voltas,
-        COUNT(DISTINCT res.driver_id) AS num_pilotos
-      FROM results res
-      JOIN races ra  ON res.race_id   = ra.id
-      JOIN seasons s ON ra.season_id  = s.id
-      WHERE res.constructor_id = $1
-        AND ra.circuit_id      = $2
-      GROUP BY ra.id, ra.race_name, s.year
-      ORDER BY s.year DESC
+        race_name,
+        year,
+        COALESCE(MAX(laps), 0)    AS total_voltas,
+        COUNT(DISTINCT driver_id) AS num_pilotos
+      FROM vw_resultados
+      WHERE constructor_id = $1
+        AND circuit_id     = $2
+      GROUP BY race_id, race_name, year
+      ORDER BY year DESC
     `, [constructor_id, circuit_id]);
     res.json({ races: result.rows });
   } catch (err) {
