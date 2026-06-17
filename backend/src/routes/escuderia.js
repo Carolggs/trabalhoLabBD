@@ -160,13 +160,11 @@ router.get('/relatorios/r4/:constructor_id', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
-        d.given_name || ' ' || d.family_name  AS driver_name,
-        -- COUNT com CASE é o jeito padrão de contar apenas as linhas que atendem uma condição
-        COUNT(CASE WHEN res.position = '1' THEN 1 END)::INTEGER AS primeiras_posicoes
-      FROM results res
-      JOIN drivers d ON res.driver_id = d.id
-      WHERE res.constructor_id = $1
-      GROUP BY d.id, d.given_name, d.family_name
+        driver_name,
+        COUNT(CASE WHEN position = '1' THEN 1 END)::INTEGER AS primeiras_posicoes
+      FROM vw_resultados
+      WHERE constructor_id = $1
+      GROUP BY driver_id, driver_name
       ORDER BY primeiras_posicoes DESC, driver_name
     `, [constructor_id]);
     res.json({ rows: result.rows });
@@ -182,13 +180,10 @@ router.get('/relatorios/r5/:constructor_id', async (req, res) => {
   const { constructor_id } = req.params;
   try {
     const result = await pool.query(`
-      SELECT
-        st.status   AS status_nome,
-        COUNT(*)    AS quantidade
-      FROM results res
-      JOIN status st ON res.status_id = st.id
-      WHERE res.constructor_id = $1
-      GROUP BY st.id, st.status
+      SELECT status_nome, COUNT(*) AS quantidade
+      FROM vw_resultados
+      WHERE constructor_id = $1
+      GROUP BY status_nome
       ORDER BY quantidade DESC
     `, [constructor_id]);
     res.json({ rows: result.rows });

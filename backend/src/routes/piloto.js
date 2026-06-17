@@ -54,16 +54,11 @@ router.get('/relatorios/r6/:driver_id', async (req, res) => {
   const { driver_id } = req.params;
   try {
     const result = await pool.query(`
-      SELECT
-        s.year       AS ano,
-        ra.race_name AS corrida,
-        res.points   AS pontos
-      FROM results res
-      JOIN races   ra ON res.race_id  = ra.id
-      JOIN seasons s  ON ra.season_id = s.id
-      WHERE res.driver_id = $1
-        AND res.points > 0
-      ORDER BY s.year DESC, res.points DESC
+      SELECT year AS ano, race_name AS corrida, points AS pontos
+      FROM vw_resultados
+      WHERE driver_id = $1
+        AND points > 0
+      ORDER BY year DESC, points DESC
     `, [driver_id]);
     res.json({ rows: result.rows });
   } catch (err) {
@@ -78,13 +73,10 @@ router.get('/relatorios/r7/:driver_id', async (req, res) => {
   const { driver_id } = req.params;
   try {
     const result = await pool.query(`
-      SELECT
-        st.status  AS status_nome,
-        COUNT(*)   AS quantidade
-      FROM results res
-      JOIN status st ON res.status_id = st.id
-      WHERE res.driver_id = $1
-      GROUP BY st.id, st.status
+      SELECT status_nome, COUNT(*) AS quantidade
+      FROM vw_resultados
+      WHERE driver_id = $1
+      GROUP BY status_nome
       ORDER BY quantidade DESC
     `, [driver_id]);
     res.json({ rows: result.rows });

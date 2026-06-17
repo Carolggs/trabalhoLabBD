@@ -66,6 +66,7 @@ SELECT
     d.given_name  || ' ' || d.family_name AS driver_name,
     con.name      AS constructor_name,
     ra.race_name,
+    ra.circuit_id,
     s.year,
     c.name        AS circuit_name,
     st.status     AS status_nome
